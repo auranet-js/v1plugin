@@ -5,7 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Plugin Name: Victorini2025 by Auranet
- * Description: Rozszerzenie WooCommerce – dodaje do produktów możliwość uploadu pliku szkicu (max 10MB, jpg, png, pdf, gif, bmp) oraz pola tekstowego "Uwagi". Dla zalogowanych użytkowników, a w panelu admina strona "Szkice klientów" umożliwiająca przegląd i zbiorowe usuwanie przesłanych szkiców.
+ * Description: Rozszerzenie WooCommerce – dodaje do produktów możliwość uploadu pliku szkicu oraz pola tekstowego "Uwagi". Dla zalogowanych użytkowników, a w panelu admina strona "Szkice klientów" umożliwiająca przegląd i zbiorowe usuwanie przesłanych szkiców.
  * Version: 1.1
  * Author: Auranet
  * Text Domain: victorini2025-by-auranet
@@ -23,7 +23,7 @@ function victorini_display_sketch_and_note_fields() {
         <div class="victorini-custom-fields">
             <p>
                 <label for="customer_sketch">
-                    <?php esc_html_e('Dodaj szkic (jpg, png, pdf, gif, bmp, max 10MB):', 'victorini2025-by-auranet'); ?>
+                    <?php printf(esc_html__('Dodaj szkic (jpg, png, pdf, gif, bmp, max %dMB):', 'victorini2025-by-auranet'), intval(get_option('victorini_upload_limit', 10))); ?>
                 </label><br>
                 <input 
                     type="file" 
@@ -94,9 +94,10 @@ function victorini_capture_sketch_and_note( $cart_item_data, $product_id ) {
     // Obsługa uploadu pliku (jeśli użytkownik coś wybrał)
     if ( isset($_FILES['customer_sketch']) && !empty($_FILES['customer_sketch']['name']) ) {
         $file = $_FILES['customer_sketch'];
-        // Walidacja rozmiaru (10MB = 10 * 1024 * 1024 bajtów)
-        if ( $file['size'] > 10 * 1024 * 1024 ) {
-            wc_add_notice( __( 'Plik jest za duży. Maksymalny rozmiar to 10MB.', 'victorini2025-by-auranet' ), 'error' );
+        // Walidacja rozmiaru
+        $max_mb = intval(get_option('victorini_upload_limit', 10));
+        if ( $file['size'] > $max_mb * 1024 * 1024 ) {
+            wc_add_notice( sprintf( __( 'Plik jest za duży. Maksymalny rozmiar to %dMB.', 'victorini2025-by-auranet' ), $max_mb ), 'error' );
             return $cart_item_data;
         }
         // Dozwolone typy MIME

@@ -36,6 +36,7 @@ require_once $plugin_dir . 'inc/pcvProduct.php';
 require_once $plugin_dir . 'inc/kapinosyAndMinimalPricing.php';
 require_once $plugin_dir . 'inc/obrobkaBlachyRepeater.php';
 require_once $plugin_dir . 'inc/countertopPersonalization.php';
+require_once $plugin_dir . 'inc/settings.php';
 // require_once $plugin_dir . 'inc/edit-cart-item.php';
 
 /* ------------------------------------------------------------------
@@ -89,14 +90,22 @@ function victorini2025_enqueue_block_shipping()
         true
     );
 
+    $blocked_id = get_option('victorini_blocked_method_id', 'flat_rate:7');
+    $threshold = (float) get_option('victorini_cart_threshold', 1000);
+    $blocked_methods = array_filter(array_map('trim', explode(',', get_option('victorini_blocked_methods', 'flat_rate:1,flat_rate:5'))));
+    $length_limit = (int) get_option('victorini_length_limit', 2500);
+
     wp_localize_script(
         $handle,
         'victoriniBlock',
         [
             'hasOversize' => victorini_cart_has_oversize(),
             'hasRestrictCat' => victorini_cart_has_restricted_material(),
-            'blockedId' => 'flat_rate:7',
+            'blockedId' => $blocked_id,
             'cartValue' => WC()->cart->get_cart_contents_total() + WC()->cart->get_cart_contents_tax(),
+            'cartThreshold' => $threshold,
+            'blockedAboveThreshold' => $blocked_methods,
+            'cartLengthLimit' => $length_limit,
         ]
     );
 
@@ -121,12 +130,13 @@ add_filter('your_taxonomy_filter_item_html', function ($html, $term) {
  * 5.  POMOCNICZE – KOSZYK
  * ------------------------------------------------------------------ */
 
-/** Czy w koszyku jest produkt > 2500 mm? */
+/** Czy w koszyku jest produkt przekraczający ustawiony limit długości? */
 function victorini_cart_has_oversize(): bool
 {
+    $limit = (int) get_option('victorini_length_limit', 2500);
     foreach (WC()->cart->get_cart() as $item) {
         $itemLength = $item['custom_length'] ?? $item['custom_length_obrobka'] ?? '';
-        if (!empty($itemLength) && (int) $itemLength > 2500) {
+        if (!empty($itemLength) && (int) $itemLength > $limit) {
             return true;
         }
     }
@@ -144,16 +154,16 @@ function victorini_cart_has_restricted_material(): bool
 {
 
     /* slug-i kategorii „dużych” */
-    $root_cats = [
-        'blaty-kuchenne',
-        'blaty-lazienkowe',
-        'parapety-wewnetrzne',
-        'parapety-zewnetrzne',
-        'schody',
-    ];
+    $root_cats = array_filter(array_map('trim', explode(',', get_option(
+        'victorini_big_categories',
+        'blaty-kuchenne,blaty-lazienkowe,parapety-wewnetrzne,parapety-zewnetrzne,schody'
+    ))));
 
     /* slug-i blokowanych materiałów */
-    $blocked_mat = ['granit', 'konglomerat-marmurowy'];
+    $blocked_mat = array_filter(array_map('trim', explode(',', get_option(
+        'victorini_blocked_materials',
+        'granit,konglomerat-marmurowy'
+    ))));
 
     foreach (WC()->cart->get_cart() as $item) {
 
@@ -210,19 +220,23 @@ function victorini_cart_has_restricted_material(): bool
 
 add_filter('woocommerce_package_rates', function ($rates, $package) {
 
-    /* --- 1. Długi towar (> 2500 mm) --- */
+    $blocked_id = get_option('victorini_blocked_method_id', 'flat_rate:7');
+    $threshold = (float) get_option('victorini_cart_threshold', 1000);
+    $blocked_methods = array_filter(array_map('trim', explode(',', get_option('victorini_blocked_methods', 'flat_rate:1,flat_rate:5'))));
+
+    /* --- 1. Długi towar (> limit) --- */
     $needs_manual_shipping = victorini_cart_has_oversize() || victorini_cart_has_restricted_material();
 
-    if ($needs_manual_shipping && isset($rates['flat_rate:7'])) {
-        $rate = $rates['flat_rate:7'];
+    if ($needs_manual_shipping && isset($rates[$blocked_id])) {
+        $rate = $rates[$blocked_id];
 
         // dopisek w labelu
         $rate->set_label($rate->get_label() . '');
     }
 
-    /* --- 2. Wartość koszyka > 1000 zł (same produkty) --- */
-    if ((WC()->cart->get_cart_contents_total() + WC()->cart->get_cart_contents_tax()) > 1000) {
-        foreach (['flat_rate:1', 'flat_rate:5'] as $blocked) {
+    /* --- 2. Wartość koszyka > próg --- */
+    if ((WC()->cart->get_cart_contents_total() + WC()->cart->get_cart_contents_tax()) > $threshold) {
+        foreach ($blocked_methods as $blocked) {
             unset($rates[$blocked]);
         }
     }
@@ -401,8 +415,12 @@ function add_custom_product_meta($product, $request, $creating)
  * 12.  WYSYŁKA LOGÓW BŁĘDÓW NA MAILA
  * ------------------------------------------------------------------ */
 
-function send_error_to_email($error, $email = 'dominik.chyziak@septemonline.com')
+function send_error_to_email($error, $email = null)
 {
+
+    if (!$email) {
+        $email = get_option('victorini_error_email', 'dominik.chyziak@septemonline.com');
+    }
 
     $subject = 'Błąd na stronie: ' . $_SERVER['HTTP_HOST'];
     $message = "Wystąpił błąd:\n\n" . print_r($error, true) . "\n\n";
