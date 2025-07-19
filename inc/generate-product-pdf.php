@@ -369,15 +369,15 @@ function generuj_pdf_produktu_ajax()
     $product_data = $_POST['product'];
 
     $pdf_data = array(
-        'name' => $product_data['name'],
-        'productId' => $product_data['product_id'],
-        'price' => $product_data['final_price'],
-        'product_image_base64' => $product_data['image_base64'],
-        'custom_length' =>  $product_data["custom_length"],
-        'custom_width' => $product_data["custom_width"],
-        'kapinosy' => $product_data["kapinosy"],
-        'narozniki' => $product_data["narozniki"],
-        'quantity' => $product_data["quantity"],
+        'name' => sanitize_text_field($product_data['name']),
+        'productId' => intval($product_data['product_id']),
+        'price' => floatval($product_data['final_price']),
+        'product_image_base64' => sanitize_text_field($product_data['image_base64']),
+        'custom_length' => isset($product_data['custom_length']) ? intval($product_data['custom_length']) : 0,
+        'custom_width' => isset($product_data['custom_width']) ? intval($product_data['custom_width']) : 0,
+        'kapinosy' => sanitize_text_field($product_data['kapinosy']),
+        'narozniki' => sanitize_text_field($product_data['narozniki']),
+        'quantity' => isset($product_data['quantity']) ? intval($product_data['quantity']) : 1,
     );
 
     $pdf_url = generuj_pdf_z_produktow($pdf_data, $product_data['product_id'], true);
@@ -392,7 +392,7 @@ function generuj_pdf_produktu_ajax()
 function generuj_pdf_z_produktow($products_data, $order_id, $return_url = false)
 {
     require_once plugin_dir_path(__DIR__) . 'vendor/autoload.php';
-    $product = wc_get_product($products_data["productId"]);
+    $product = wc_get_product(intval($products_data["productId"]));
     $image_url = wp_get_attachment_image_url($product->get_image_id(), 'full');
 
     $html = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>';
@@ -460,7 +460,7 @@ function generuj_pdf_z_produktow($products_data, $order_id, $return_url = false)
     $dompdf->setPaper('A4', 'portrait');
     $dompdf->render();
 
-    $filename = 'produkt-' . $order_id . '-' . time() . '.pdf';
+    $filename = 'produkt-' . intval($order_id) . '-' . time() . '.pdf';
 
     if ($return_url) {
         $upload_dir = wp_upload_dir();

@@ -176,10 +176,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 const quantityInput = document.querySelector('input[name="quantity"]');
-quantityInput.addEventListener('change', function () {
-    window.quantity = this.value;
-    calculateFinalPrice();
-});
+if (quantityInput) {
+    quantityInput.addEventListener('change', function () {
+        window.quantity = parseInt(this.value, 10) || 1;
+        calculateFinalPrice();
+    });
+}
 
 document.addEventListener('DOMContentLoaded', function () {
     const customWidthInput = document.getElementById('custom_width');
