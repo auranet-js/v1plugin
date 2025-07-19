@@ -1,0 +1,52 @@
+.woocommerce-variation-add-to-cart {
+    display: block !important;
+}
+
+@media (min-width: 768px) {
+    .elementor-menu-cart__container {
+        min-width: 700px !important;
+    }
+}
+
+.product-remove {
+    display: none !important;
+}
+
+.product-thumbnail {
+    min-width: 64px !important;
+}
+
+.product-thumbnail img {
+    width: 90px !important;
+}
+
+.cart {
+    display: block !important;
+}
+
+.woocommerce div.product form.cart .button {
+    float: none !important;
+}
+
+#repeater-container{
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    padding-bottom: 0.75rem;
+}
+
+.repeater-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.repeater-label {
+    flex-basis: 100px;
+    text-align: right;
+    padding-right: 10px;
+}
+
+.repeater-field {
+    flex: 1;
+}
