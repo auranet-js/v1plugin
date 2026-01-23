@@ -347,29 +347,12 @@ function auranet_save_cart_to_cpt($cart, $customer_data = array()) {
         $dimensions = $custom_length . ' x ' . $custom_width . ' mm';
     }
     
-    // Razem BRUTTO (line_subtotal to netto, więc dodajemy tax)
+    // Razem BRUTTO
     $line_total_incl_tax = $cart_item['line_subtotal'] + $cart_item['line_subtotal_tax'];
-    
-    // Cena jednostkowa = razem / ilość (zaokrąglone do 2 miejsc)
     $price_per_unit = round($line_total_incl_tax / $cart_item['quantity'], 2);
     
     $subtotal += $cart_item['line_subtotal'];
     $tax_total += $cart_item['line_subtotal_tax'];
-    
-    // Pobierz atrybuty wariantu (np. kolor RAL, grubość) - TERAZ TUTAJ!
-    $variation_attributes = '';
-    if ($product->is_type('variation')) {
-        $attributes = $product->get_attributes();
-        $attr_labels = array();
-        foreach ($attributes as $attr_key => $attr_value) {
-            $taxonomy = str_replace('attribute_', '', $attr_key);
-            $term = get_term_by('slug', $attr_value, $taxonomy);
-            if ($term) {
-                $attr_labels[] = wc_attribute_label($taxonomy) . ': ' . $term->name;
-            }
-        }
-        $variation_attributes = implode(', ', $attr_labels);
-    }
     
     $items[] = array(
         'product_id'  => $cart_item['product_id'],
@@ -381,7 +364,6 @@ function auranet_save_cart_to_cpt($cart, $customer_data = array()) {
         'dimensions'  => $dimensions,
         'custom_file' => isset($cart_item['custom_file']) ? $cart_item['custom_file'] : '',
         'image_url'   => wp_get_attachment_image_url($product->get_image_id(), 'thumbnail'),
-        'attributes'  => $variation_attributes,
     );
 }
     
