@@ -13,12 +13,22 @@ function custom_email_order_items_table($table_html, $order, $args = array(), $p
         $custom_width = $item->get_meta('custom_width');
         $custom_length_obrobka = $item->get_meta('custom_length_obrobka');
         
-        // Zbierz wymiary obróbki (A, B, C...)
+        // Pobierz wymiary obróbki - NAJPIERW SPRÓBUJ JAKO TABLICĘ (jak w koszyku)
+        $custom_wymiar = $item->get_meta('custom_wymiar');
+        
+        // Zbierz wymiary - kombinuj oba sposoby zapisu
         $wymiary_obrobki = array();
-        foreach (range('A', 'Z') as $letter) {
-            $value = $item->get_meta('custom_wymiar_' . strtolower($letter));
-            if ($value) {
-                $wymiary_obrobki[$letter] = $value;
+        
+        // Sposób 1: Jeśli jest zapisane jako tablica
+        if (is_array($custom_wymiar) && !empty($custom_wymiar)) {
+            $wymiary_obrobki = $custom_wymiar;
+        } else {
+            // Sposób 2: Jeśli zapisane jako osobne meta (A, B, C...)
+            foreach (range('a', 'z') as $letter) { // małe litery!
+                $value = $item->get_meta('custom_wymiar_' . $letter);
+                if ($value) {
+                    $wymiary_obrobki[$letter] = $value;
+                }
             }
         }
         
@@ -51,8 +61,9 @@ function custom_email_order_items_table($table_html, $order, $args = array(), $p
                             if ($custom_length_obrobka) {
                                 $dims[] = 'Długość: ' . esc_html($custom_length_obrobka) . 'mm';
                             }
-                            foreach ($wymiary_obrobki as $letter => $value) {
-                                $dims[] = $letter . ': ' . esc_html($value) . 'mm';
+                            // Wyświetl wymiary A, B, C... (konwertuj klucze na wielkie litery)
+                            foreach ($wymiary_obrobki as $name => $value) {
+                                $dims[] = strtoupper($name) . ': ' . esc_html($value) . 'mm';
                             }
                             echo implode(', ', $dims);
                             ?>
@@ -65,20 +76,22 @@ function custom_email_order_items_table($table_html, $order, $args = array(), $p
                             <?php echo ($custom_length && $custom_width) ? ' x ' : ''; ?>
                             <?php echo $custom_width ? $custom_width . ' mm' : ''; ?>
                             <?php
-                            $length_in_meters = $custom_length / 1000;
-                            $width_in_meters = $custom_width / 1000;
-                            $area_in_square_meters = $length_in_meters * $width_in_meters;
-                            $base_price = get_base_price($product);
+                            if ($custom_length && $custom_width) {
+                                $length_in_meters = $custom_length / 1000;
+                                $width_in_meters = $custom_width / 1000;
+                                $area_in_square_meters = $length_in_meters * $width_in_meters;
+                                $base_price = get_base_price($product);
+                                echo ' (' . number_format($area_in_square_meters, 2) . getUnit($product) . ' x ' . wc_price($base_price) . ')';
+                            }
                             ?>
-                            (<?= number_format($area_in_square_meters, 2) . getUnit($product) ?> x <?php echo wc_price($base_price); ?>)
                         </div>
                     <?php endif; ?>
                     
                     <?php if ($custom_file_url) : ?>
                         <div style="margin-top: 10px;">
                             <strong>Załączony plik:</strong><br>
-                            <a href="<?= $custom_file_url ?>" target="_blank" style="text-decoration: none; color: #0073aa;">
-                                <img src="<?= $custom_file_url ?>"
+                            <a href="<?= esc_url($custom_file_url) ?>" target="_blank" style="text-decoration: none; color: #0073aa;">
+                                <img src="<?= esc_url($custom_file_url) ?>"
                                     style="max-width: 100px; max-height: 100px; margin-top: 5px;"
                                     width="100"
                                     height="100">
