@@ -13,10 +13,10 @@ function custom_email_order_items_table($table_html, $order, $args = array(), $p
         $custom_width = $item->get_meta('custom_width');
         $custom_length_obrobka = $item->get_meta('custom_length_obrobka');
         
-        // Pobierz wymiary obróbki - NAJPIERW SPRÓBUJ JAKO TABLICĘ (jak w koszyku)
+        // Pobierz wymiary obróbki
         $custom_wymiar = $item->get_meta('custom_wymiar');
         
-        // Zbierz wymiary - kombinuj oba sposoby zapisu
+        // Zbierz wymiary
         $wymiary_obrobki = array();
         
         // Sposób 1: Jeśli jest zapisane jako tablica
@@ -24,7 +24,7 @@ function custom_email_order_items_table($table_html, $order, $args = array(), $p
             $wymiary_obrobki = $custom_wymiar;
         } else {
             // Sposób 2: Jeśli zapisane jako osobne meta (A, B, C...)
-            foreach (range('a', 'z') as $letter) { // małe litery!
+            foreach (range('A', 'Z') as $letter) {
                 $value = $item->get_meta('custom_wymiar_' . $letter);
                 if ($value) {
                     $wymiary_obrobki[$letter] = $value;
@@ -61,9 +61,8 @@ function custom_email_order_items_table($table_html, $order, $args = array(), $p
                             if ($custom_length_obrobka) {
                                 $dims[] = 'Długość: ' . esc_html($custom_length_obrobka) . 'mm';
                             }
-                            // Wyświetl wymiary A, B, C... (konwertuj klucze na wielkie litery)
                             foreach ($wymiary_obrobki as $name => $value) {
-                                $dims[] = strtoupper($name) . ': ' . esc_html($value) . 'mm';
+                                $dims[] = $name . ': ' . esc_html($value) . 'mm';
                             }
                             echo implode(', ', $dims);
                             ?>
