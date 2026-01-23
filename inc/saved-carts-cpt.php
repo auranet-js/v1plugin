@@ -300,7 +300,21 @@ function auranet_generate_cart_number() {
  */
 function auranet_save_cart_to_cpt($cart, $customer_data = array()) {
     $cart_number = auranet_generate_cart_number();
-    
+  
+    // Pobierz atrybuty wariantu
+    $variation_attributes = '';
+    if ($product->is_type('variation')) {
+        $attributes = $product->get_attributes();
+        $attr_labels = array();
+        foreach ($attributes as $attr_key => $attr_value) {
+            $taxonomy = str_replace('attribute_', '', $attr_key);
+            $term = get_term_by('slug', $attr_value, $taxonomy);
+            if ($term) {
+                $attr_labels[] = wc_attribute_label($taxonomy) . ': ' . $term->name;
+            }
+        }
+        $variation_attributes = implode(', ', $attr_labels);
+    }  
     
     $items = array();
     $subtotal = 0;
@@ -351,6 +365,7 @@ function auranet_save_cart_to_cpt($cart, $customer_data = array()) {
         'dimensions'  => $dimensions,
         'custom_file' => isset($cart_item['custom_file']) ? $cart_item['custom_file'] : '',
         'image_url'   => wp_get_attachment_image_url($product->get_image_id(), 'thumbnail'),
+        'attributes'  => $variation_attributes,
     );
 }
     
