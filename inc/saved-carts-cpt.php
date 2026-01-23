@@ -301,20 +301,7 @@ function auranet_generate_cart_number() {
 function auranet_save_cart_to_cpt($cart, $customer_data = array()) {
     $cart_number = auranet_generate_cart_number();
     
-    // Pobierz atrybuty wariantu (np. kolor RAL, grubość)
-    $variation_attributes = '';
-    if ($product->is_type('variation')) {
-        $attributes = $product->get_attributes();
-        $attr_labels = array();
-        foreach ($attributes as $attr_key => $attr_value) {
-            $taxonomy = str_replace('attribute_', '', $attr_key);
-            $term = get_term_by('slug', $attr_value, $taxonomy);
-            if ($term) {
-                $attr_labels[] = wc_attribute_label($taxonomy) . ': ' . $term->name;
-            }
-        }
-        $variation_attributes = implode(', ', $attr_labels);
-    }
+    
     $items = array();
     $subtotal = 0;
     $tax_total = 0;
