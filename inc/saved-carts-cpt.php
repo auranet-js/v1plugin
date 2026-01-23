@@ -339,40 +339,33 @@ function auranet_save_cart_to_cpt($cart, $customer_data = array()) {
         
         // TUTAJ DODAJ - Pobierz atrybuty wariantu
         // Pobierz atrybuty wariantu
-// Pobierz atrybuty wariantu
+/// Pobierz atrybuty wariantu
 $variation_attributes = '';
 if ($product->is_type('variation')) {
     $attr_labels = array();
+    $attributes = $product->get_attributes();
     
-    // Pobierz wszystkie metadane wariantu
-    $variation_data = $product->get_variation_attributes();
-    
-    error_log('Variation data: ' . print_r($variation_data, true));
-    
-    foreach ($variation_data as $attr_key => $attr_value) {
+    foreach ($attributes as $attr_key => $attr_value) {
         if (empty($attr_value)) {
             continue;
         }
         
-        // Usuń prefix 'attribute_'
         $taxonomy = str_replace('attribute_', '', $attr_key);
         
         // Sprawdź czy to taksonomia
         if (taxonomy_exists($taxonomy)) {
             $term = get_term_by('slug', $attr_value, $taxonomy);
             if ($term) {
-                $label = wc_attribute_label($taxonomy);
-                $attr_labels[] = $label . ': ' . $term->name;
+                $attr_labels[] = wc_attribute_label($taxonomy) . ': ' . $term->name;
             }
         } else {
-            // Niestandardowy atrybut
+            // Atrybut niestandardowy (nie-taksonomia)
             $label = wc_attribute_label($attr_key);
             $attr_labels[] = $label . ': ' . $attr_value;
         }
     }
     
     $variation_attributes = implode(' | ', $attr_labels);
-    error_log('Final attributes string: ' . $variation_attributes);
 }
         
         $items[] = array(
