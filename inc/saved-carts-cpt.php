@@ -306,15 +306,32 @@ function auranet_save_cart_to_cpt($cart, $customer_data = array()) {
     $tax_total = 0;
     
     foreach ($cart->get_cart() as $cart_item) {
-        $product = $cart_item['data'];
-        
-        $custom_length = isset($cart_item['custom_length']) ? $cart_item['custom_length'] : '';
-        $custom_width = isset($cart_item['custom_width']) ? $cart_item['custom_width'] : '';
-        $dimensions = '';
-        if (!empty($custom_length) && !empty($custom_width)) {
-            $dimensions = $custom_length . ' x ' . $custom_width . ' mm';
+    $product = $cart_item['data'];
+    
+    $custom_length = isset($cart_item['custom_length']) ? $cart_item['custom_length'] : '';
+    $custom_width = isset($cart_item['custom_width']) ? $cart_item['custom_width'] : '';
+    $custom_length_obrobka = isset($cart_item['custom_length_obrobka']) ? $cart_item['custom_length_obrobka'] : '';
+    $custom_wymiar = isset($cart_item['custom_wymiar']) ? $cart_item['custom_wymiar'] : array();
+    
+    $dimensions = '';
+    
+    // Wymiary obróbki blachy
+    if (!empty($custom_length_obrobka) || !empty($custom_wymiar)) {
+        $dims = array();
+        if ($custom_length_obrobka) {
+            $dims[] = 'Długość: ' . $custom_length_obrobka . 'mm';
         }
-        
+        if (is_array($custom_wymiar)) {
+            foreach ($custom_wymiar as $name => $value) {
+                $dims[] = strtoupper($name) . ': ' . $value . 'mm';
+            }
+        }
+        $dimensions = implode(', ', $dims);
+    }
+    // Standardowe wymiary (parapety)
+    elseif (!empty($custom_length) && !empty($custom_width)) {
+        $dimensions = $custom_length . ' x ' . $custom_width . ' mm';
+    }
         // Razem BRUTTO (line_subtotal to netto, więc dodajemy tax)
         $line_total_incl_tax = $cart_item['line_subtotal'] + $cart_item['line_subtotal_tax'];
         
