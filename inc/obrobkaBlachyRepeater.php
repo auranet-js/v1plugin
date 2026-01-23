@@ -202,20 +202,27 @@ function display_sheet_metal_configurator_on_product_page()
 add_filter('woocommerce_get_item_data', 'display_sheet_metal_data_in_cart', 10, 2);
 function display_sheet_metal_data_in_cart($item_data, $cart_item)
 {
-    if (isset($cart_item['custom_length_obrobka'])) {
+    // Wymiary obróbki blachy
+    if (isset($cart_item['custom_length_obrobka']) || (isset($cart_item['custom_wymiar']) && is_array($cart_item['custom_wymiar']))) {
+        $dims = array();
+        
+        if (isset($cart_item['custom_length_obrobka'])) {
+            $dims[] = 'Długość: ' . $cart_item['custom_length_obrobka'] . 'mm';
+        }
+        
+        if (isset($cart_item['custom_wymiar']) && is_array($cart_item['custom_wymiar'])) {
+            foreach ($cart_item['custom_wymiar'] as $name => $value) {
+                $dims[] = strtoupper($name) . ': ' . $value . 'mm';
+            }
+        }
+        
         $item_data[] = array(
-            'key'     => __('Długość', 'woocommerce'),
-            'value'   => $cart_item['custom_length_obrobka'] . ' mm',
+            'key'     => __('Wymiary obróbki', 'woocommerce'),
+            'value'   => implode(', ', $dims),
+            'display' => implode(', ', $dims),
         );
     }
-    if (isset($cart_item['custom_wymiar']) && is_array($cart_item['custom_wymiar'])) {
-        foreach ($cart_item['custom_wymiar'] as $name => $value) {
-            $item_data[] = array(
-                'key'     => __('Wymiar', 'woocommerce') . ' ' . esc_html($name),
-                'value'   => $value . ' mm',
-            );
-        }
-    }
+    
     return $item_data;
 }
 
