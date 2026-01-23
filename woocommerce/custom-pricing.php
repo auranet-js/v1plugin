@@ -39,8 +39,29 @@ function custom_wc_add_product_js_variables()
     $is_pcv = get_post_meta($product->get_id(), '_pcv_product', true) === 'yes';
     $obrobka_blachy = get_post_meta($product->get_id(), '_obrobka_blachy_enabled', true) === 'yes';
 
-    if (!$is_area && !$is_linear && !$is_pcv && !$obrobka_blachy)
+    if ( ! $is_area && ! $is_linear && ! $is_pcv && ! $obrobka_blachy ) {
+
+        $unit_price = (float) wc_get_price_including_tax( $product );
+
+        $data = array(
+            'fallback'      => true,          // możesz użyć w JS: if(productData.fallback) ...
+            'unitPrice'     => $unit_price,   // cena za sztukę
+            'pricePerM2'    => $unit_price,   // zostawiam, żeby JS się nie wywalił
+            'minLength'     => 0,
+            'maxLength'     => 0,
+            'minWidth'      => 0,
+            'maxWidth'      => 0,
+            'isPcv'         => false,
+            'isLinear'      => false,
+            'minPrice'      => 0,
+            'kapinosyPrice' => 0,
+            'variantPrices' => array(),
+        );
+
+        $encoded = wp_json_encode( $data );
+        echo '<script>window.productData = ' . $encoded . ';(function(){try{document.dispatchEvent(new CustomEvent("victoriniProductDataReady",{detail:window.productData}));}catch(e){var evt=document.createEvent("CustomEvent");evt.initCustomEvent("victoriniProductDataReady",true,true,window.productData);document.dispatchEvent(evt);}})();</script>';
         return;
+    }
 
     $min_length = get_post_meta($product->get_id(), '_min_length', true) ?: 100;
     $max_length = get_post_meta($product->get_id(), '_max_length', true) ?: 3200;
@@ -80,7 +101,15 @@ function custom_wc_add_product_js_variables()
         variantPrices: " . json_encode($variant_prices) . "
     };
 
-    console.log(productData.variantPrices);
+    (function(){
+        try {
+            document.dispatchEvent(new CustomEvent('victoriniProductDataReady', { detail: productData }));
+        } catch (e) {
+            var evt = document.createEvent('CustomEvent');
+            evt.initCustomEvent('victoriniProductDataReady', true, true, productData);
+            document.dispatchEvent(evt);
+        }
+    })();
     </script>";
 }
 add_action('wp_footer', 'custom_wc_add_product_js_variables');
@@ -266,6 +295,84 @@ function calculateObrobkaBlachyPrice($cart_item)
     $cart_item['data']->set_price($new_price);
 }
 
+/**
+ * Wyświetlanie ceny w listingu dla produktów z włączoną „Obróbką blachy”.
+ * Liczymy identycznie jak na karcie produktu dla wartości domyślnych:
+ *   total = (min_length_mm/1000) * (sum(default_dimensions_mm)/1000) * price_per_m2_gross
+ */
+function victorini_obrobka_blachy_price_html($price_html, $product) {
+    if (is_admin() && !wp_doing_ajax()) {
+        return $price_html;
+    }
+
+    // Nie ingeruj na karcie produktu
+    if (function_exists('is_product') && is_product()) {
+        return $price_html;
+    }
+
+    if (!$product instanceof WC_Product) {
+        return $price_html;
+    }
+
+    $check_product = $product;
+    if ($product->is_type('variation')) {
+        $parent = wc_get_product($product->get_parent_id());
+        if ($parent instanceof WC_Product) {
+            $check_product = $parent;
+        }
+    }
+
+    $enabled = get_post_meta($check_product->get_id(), '_obrobka_blachy_enabled', true) === 'yes';
+    if (!$enabled) {
+        return $price_html;
+    }
+
+    // Cena za m2 – brutto (spójnie z JS na karcie produktu)
+    // Dla produktów zmiennych weź min cenę wariantu (brutto)
+    if (function_exists('victorini_min_price_incl_tax')) {
+        $unit_price = (float) victorini_min_price_incl_tax($check_product);
+    } else {
+        if ($check_product->is_type('variable')) {
+            $unit_price = (float) $check_product->get_variation_price('min', true);
+        } else {
+            $unit_price = (float) wc_get_price_including_tax($product);
+        }
+    }
+
+    // Długość: domyślnie min_length z meta
+    $min_length_mm = (float) (get_post_meta($check_product->get_id(), '_min_length', true) ?: 0);
+
+    // Suma domyślnych wymiarów z konfiguratora
+    $dims = get_post_meta($check_product->get_id(), '_wymiary_obrobki', true);
+    $sum_width_mm = 0.0;
+    if (is_array($dims)) {
+        foreach ($dims as $row) {
+            $v = isset($row['domyslna']) ? (float) $row['domyslna'] : 0.0;
+            $sum_width_mm += $v;
+        }
+    }
+
+    // Gdy brakuje danych – nie nadpisuj ceny
+    if ($unit_price <= 0 || $min_length_mm <= 0 || $sum_width_mm <= 0) {
+        return $price_html;
+    }
+
+    $length_m = $min_length_mm / 1000.0;
+    $width_m  = $sum_width_mm / 1000.0;
+    $total    = $unit_price * $length_m * $width_m;
+
+    if ($total <= 0) {
+        return $price_html;
+    }
+
+    return wc_price($total);
+}
+
+// Wysoki priorytet i różne hooki dla zgodności z motywami
+add_filter('woocommerce_get_price_html', 'victorini_obrobka_blachy_price_html', 9999, 2);
+add_filter('woocommerce_variable_price_html', 'victorini_obrobka_blachy_price_html', 9999, 2);
+add_filter('woocommerce_variable_sale_price_html', 'victorini_obrobka_blachy_price_html', 9999, 2);
+
 function calculate_kapinos_price($price, $length, $width, $price_per_mb)
 {
     $kapinos_charge = $length * $price_per_mb;
@@ -402,7 +509,8 @@ function waliduj_minimalna_cene($passed, $product_id, $quantity)
         $price = calculate_kapinos_price($price, $length, $width, $kapinosy_price);
     }
 
-    if ($price < $min_price) {
+    $total = $price * max(1, (int)$quantity); 
+    if ($total < $min_price) {
         wc_add_notice(
             sprintf('Minimalna cena dla tego produktu to %s', wc_price($min_price)),
             'error'
@@ -506,6 +614,24 @@ function getUnit($product)
 
 
 
+if (!function_exists('victorini_linear_default_price')) {
+    function victorini_linear_default_price(WC_Product $product): float
+    {
+        $base_price = wc_get_price_including_tax($product);
+        $min_width = get_post_meta($product->get_id(), '_min_width', true);
+        $min_width = floatval($min_width);
+        if ($min_width <= 0) {
+            $min_width = 100;
+        }
+
+        $length_mm = 1000;
+        $width_with_allowance = $min_width + 70;
+
+        return ($length_mm / 1000) * ($width_with_allowance / 1000) * $base_price;
+    }
+}
+
+
 add_action('woocommerce_before_add_to_cart_button', 'display_price_above_add_to_cart', 1000);
 function display_price_above_add_to_cart()
 {
@@ -524,7 +650,11 @@ function display_price_above_add_to_cart()
         }
         echo '<div style="font-size: 24px; font-weight: bold; margin: 8px 0;">Cena: <span id="final-price">' . $lowest_price . '</span></div>';
     } else if ($product->is_type('simple')) {
-        $price = $product->get_price();
+        if ($is_linear) {
+            $price = victorini_linear_default_price($product);
+        } else {
+            $price = wc_get_price_including_tax($product);
+        }
         $formatted_price = wc_price($price);
 
         echo '<div style="font-size: 24px; font-weight: bold; margin: 8px 0;">Cena: <span id="final-price">' . $formatted_price . '</span></div>';
@@ -554,19 +684,18 @@ function hiddenFields()
         $is_linear = get_post_meta($product->get_id(), '_linear_meter_pricing', true) === 'yes';
         $is_area = get_post_meta($product->get_id(), '_is_calculated_by_area', true) === 'yes';
         if ($is_area) {
-            echo '<input type="hidden" name="custom_length" id="custom_length_inside" required >';
+        echo '<input type="hidden" name="custom_length" id="custom_length_inside" required >';
             if ($width_fixed) {
                 echo '<input type="hidden" name="custom_width" id="custom_width_inside" readonly value="' . $max_width . '" >';
             } else {
                 echo '<input type="hidden" name="custom_width" id="custom_width_inside" required >';
             }
         } else if ($is_linear) {
+            // Dla produktów liczonych w mb: długość zawsze 1000 mm, szerokość = minimalna (fallback 100)
             echo '<input type="hidden" name="custom_length" id="custom_length_inside" value="1000" required >';
-            if ($width_fixed) {
-                echo '<input type="hidden" name="custom_width" id="custom_width_inside" value="' . $max_width . '" readonly >';
-            } else {
-                echo '<input type="hidden" name="custom_width" id="custom_width_inside" value="100" required >';
-            }
+            $default_w = $width_fixed ? $max_width : ($min_width ? $min_width : 100);
+            $readonly  = $width_fixed ? ' readonly' : '';
+            echo '<input type="hidden" name="custom_width" id="custom_width_inside" value="' . esc_attr($default_w) . '"' . $readonly . ' >';
         }
         echo '<input type="hidden" name="countertop_cutouts" id="countertop_cutouts_hidden" value="">';
     }

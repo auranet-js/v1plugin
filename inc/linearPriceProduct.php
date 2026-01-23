@@ -29,12 +29,24 @@ function linear_product_fields()
         return;
 
     $attributes = getCartItemData();
-    $custom_length = isset($attributes['custom_length']) ? $attributes['custom_length'] : '1000';
-    $custom_width = isset($attributes['custom_width']) ? $attributes['custom_width'] : '100';
+    $custom_length = $attributes['custom_length'] ?? '';
+    $custom_width = $attributes['custom_width'] ?? '';
 
     $min_width = get_post_meta($product->get_id(), '_min_width', true);
     $max_width = get_post_meta($product->get_id(), '_max_width', true);
     $width_fixed = ($min_width && $max_width && $min_width == $max_width);
+
+    if ($custom_length === '' || (float) $custom_length <= 0) {
+        $custom_length = '1000';
+    }
+
+    if ($custom_width === '' || (float) $custom_width <= 0) {
+        if ($min_width !== '') {
+            $custom_width = (string) $min_width;
+        } else {
+            $custom_width = '100';
+        }
+    }
 
 
     if (get_post_meta($product->get_id(), '_linear_meter_pricing', true) === 'yes') {
@@ -47,7 +59,7 @@ function linear_product_fields()
 
         echo '<div style="flex: 1; min-width: 150px;">';
         echo '<label for="custom_width" style="display: block; font-weight: 600; margin-bottom: 4px;">Szerokość (mm):</label>';
-        echo '<input type="number" id="custom_width" value="' . $custom_width . '" name="custom_width" required style="width: 100%;">';
+        echo '<input type="number" id="custom_width" value="' . esc_attr($custom_width) . '" name="custom_width" required style="width: 100%;">';
         echo '<small id="width_error" style="color:red; display:block; margin-top: 4px;"></small>';
         echo '</div>';
 
@@ -55,10 +67,10 @@ function linear_product_fields()
         echo '<div style="flex: 1; min-width: 150px;">';
         echo '<label for="custom_length" style="display: block; font-weight: 600; margin-bottom: 4px;">Długość (mm):</label>';
         if ($width_fixed) {
-            echo '<input type="number" id="custom_width" value="' . $min_width . '" name="custom_width" readonly style="width: 100%; background-color: #f5f5f5;">';
+            echo '<input type="number" id="custom_width" value="' . esc_attr($min_width) . '" name="custom_width" readonly style="width: 100%; background-color: #f5f5f5;">';
             echo '<small id="width_error" style="display:block; margin-top: 4px;"></small>';
         } else {
-            echo '<input type="number" id="custom_length" value="' . $custom_length . '" name="custom_length" required style="width: 100%;">';
+            echo '<input type="number" id="custom_length" value="' . esc_attr($custom_length) . '" name="custom_length" required style="width: 100%;">';
             echo '<small id="length_error" style="color:red; display:block; margin-top: 4px;"></small>';
         }
         echo '</div>';

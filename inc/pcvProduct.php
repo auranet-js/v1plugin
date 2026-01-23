@@ -184,7 +184,7 @@ function add_variation_dimension_data()
 
     echo '<script>
         window.wcVariationDimensions = ' . json_encode($variation_dimensions) . ';
-        window.pcvCuttingCost = ' . floatval(15) . ';
+        window.pcvCuttingCost = ' . floatval( get_option('pcv_cutting_cost', 15) ) . ';
     </script>';
 }
 

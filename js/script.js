@@ -1,7 +1,120 @@
+const PD = window.productData || {};
+const IS_FALLBACK = !!PD.fallback;
+let linearInputsTouched = false;
+let linearModeInitialized = false;
+let productDataIsReady = typeof window.productData !== 'undefined' && window.productData !== null;
+const productDataReadyQueue = [];
+
+function productDataReady() {
+    if (productDataIsReady) {
+        return true;
+    }
+    if (typeof window.productData !== 'undefined' && window.productData !== null) {
+        productDataIsReady = true;
+        return true;
+    }
+    return false;
+}
+
+function isLinearProduct() {
+    return productDataReady() && !!window.productData.isLinear;
+}
+
+function ensureLinearInitialState() {
+    if (!linearModeInitialized && isLinearProduct()) {
+        window.areaPrice = undefined;
+        linearModeInitialized = true;
+    }
+}
+
+function markLinearInputsTouched() {
+    if (isLinearProduct()) {
+        linearInputsTouched = true;
+    }
+}
+
+function applyLinearDefaultsIfNeeded() {
+    if (!productDataReady() || !isLinearProduct()) {
+        return;
+    }
+
+    const widthField = document.getElementById('custom_width');
+    const lengthField = document.getElementById('custom_length');
+
+    if (widthField && widthField.value.trim() === '') {
+        const defaultWidth = Number(window.productData.minWidth) > 0 ? Number(window.productData.minWidth) : 100;
+        widthField.value = defaultWidth;
+        const widthInside = document.getElementById('custom_width_inside');
+        if (widthInside && widthInside.value.trim() === '') {
+            widthInside.value = defaultWidth;
+        }
+    }
+
+    if (lengthField && lengthField.value.trim() === '') {
+        const defaultLength = 1000;
+        lengthField.value = defaultLength;
+        const lengthInside = document.getElementById('custom_length_inside');
+        if (lengthInside && lengthInside.value.trim() === '') {
+            lengthInside.value = defaultLength;
+        }
+    }
+}
+
+document.addEventListener('victoriniProductDataReady', function(event) {
+    if (!productDataIsReady && event && event.detail && !window.productData) {
+        window.productData = event.detail;
+    }
+    productDataIsReady = typeof window.productData !== 'undefined' && window.productData !== null;
+    ensureLinearInitialState();
+    applyLinearDefaultsIfNeeded();
+    while (productDataReadyQueue.length) {
+        const cb = productDataReadyQueue.shift();
+        try {
+            cb();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+});
+
+function onProductDataReady(callback) {
+    if (typeof callback !== 'function') {
+        return;
+    }
+    if (productDataReady()) {
+        callback();
+    } else {
+        productDataReadyQueue.push(callback);
+    }
+}
+
 function calculateFinalPrice() {
+    ensureLinearInitialState();
+    if (isLinearProduct() && (!linearInputsTouched || typeof window.areaPrice === 'undefined')) {
+        return;
+    }
+
     if (typeof window.updateCutoutsPrice === 'function') {
         window.updateCutoutsPrice({silent:true}); // nie twórz pętli – poniżej obsłużone
     }
+
+
+    if (IS_FALLBACK) {
+        const base = Number(PD.unitPrice) || 0;   // <-- masz to z PHP
+        let qty = document.querySelector('input[name="quantity"]').value;
+
+        let finalPrice =
+            (base * qty) +
+            (window.lacznik_price     ?? 0) +
+            (window.zakonczenie_price ?? 0) +
+            (window.cutouts_price     ?? 0);
+
+        const el = document.getElementById('final-price');
+        if (el) el.innerHTML = finalPrice.toFixed(2) + ' zł';
+        window.areaPrice = 0;
+        return;
+    }
+
 
      let finalPrice =
         (window.lacznik_price      ?? 0) +
@@ -27,6 +140,17 @@ document.addEventListener('DOMContentLoaded', function () {
     const deliveryDisplay = document.getElementById('delivery_info')
 
     function calculatePrice() {
+        if (!lengthField || !widthField) {
+            return;
+        }
+        if (!productDataReady()) {
+            return;
+        }
+        ensureLinearInitialState();
+        if (isLinearProduct() && !linearInputsTouched) {
+            return;
+        }
+
         let lengthStr = lengthField.value.trim();
         let widthStr = widthField.value.trim();
 
@@ -119,8 +243,11 @@ document.addEventListener('DOMContentLoaded', function () {
             price += productData.kapinosyPrice * length / 1000;
         }
 
+        let qty = document.querySelector('input[name="quantity"]').value;
+        let total = price * qty;
+
         const minPrice = document.getElementById("minimalPrice");
-        if (price < productData.minPrice) {
+        if (total < productData.minPrice) {
             if (minPrice) {
                 minPrice.style.display = 'block';
                 document.querySelectorAll(".single_add_to_cart_button").forEach(element => {
@@ -163,22 +290,49 @@ document.addEventListener('DOMContentLoaded', function () {
     window.calculatePrice = calculatePrice;
 
 
-    lengthField.addEventListener('input', calculatePrice);
-    widthField.addEventListener('input', calculatePrice);
+    if (lengthField) {
+        lengthField.addEventListener('input', function () {
+            markLinearInputsTouched();
+            calculatePrice();
+        });
+    }
+    if (widthField) {
+        widthField.addEventListener('input', function () {
+            markLinearInputsTouched();
+            calculatePrice();
+        });
+    }
     const kapinosy = document.getElementById("pa_kapinosy");
     if (kapinosy)
         kapinosy.addEventListener('change', calculatePrice);
     const narozniki = document.getElementById("pa_narozniki");
     if (narozniki)
         narozniki.addEventListener('change', calculatePrice);
-    calculatePrice();
+    const handleProductDataReady = () => {
+        ensureLinearInitialState();
+        applyLinearDefaultsIfNeeded();
+        if (!isLinearProduct()) {
+            calculatePrice();
+        }
+    };
+
+    onProductDataReady(handleProductDataReady);
+    const quantityInput = document.querySelector('input[name="quantity"]');
+    if(quantityInput) {
+        quantityInput.addEventListener('change', function () {
+            if (isLinearProduct() && !linearInputsTouched) {
+                return;
+            }
+            calculatePrice();
+        });
+    }
 });
 
 
-const quantityInput = document.querySelector('input[name="quantity"]');
-if (quantityInput) {
-    quantityInput.addEventListener('change', function () {
-        window.quantity = parseInt(this.value, 10) || 1;
+const quantityInputGlobal = document.querySelector('input[name="quantity"]');
+if (quantityInputGlobal) {
+    quantityInputGlobal.addEventListener('change', function () {
+        window.quantity = this.value;
         calculateFinalPrice();
     });
 }
@@ -190,11 +344,13 @@ document.addEventListener('DOMContentLoaded', function () {
     const customLengthInsideInput = document.getElementById('custom_length_inside');
     if (customWidthInput && customWidthInsideInput) {
         customWidthInput.addEventListener('change', function () {
+            markLinearInputsTouched();
             customWidthInsideInput.value = customWidthInput.value;
         });
     }
     if (customLengthInput && customLengthInsideInput) {
         customLengthInput.addEventListener('change', function () {
+            markLinearInputsTouched();
             customLengthInsideInput.value = customLengthInput.value;
         });
     }
@@ -202,7 +358,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
 document.addEventListener('DOMContentLoaded', function () {
-    obrobkaBlachyCalculatePrice();
     document.querySelectorAll(".calculatePrice").forEach(element => {
         element.addEventListener("input", obrobkaBlachyCalculatePrice);
     })
@@ -210,9 +365,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const thicknessSelect = document.getElementById('pa_grubosc');
     if (thicknessSelect) {
 
-        document.getElementsByClassName("single_variation")[0].style.display = "none";
+        const singleVariation = document.getElementsByClassName("single_variation")[0];
+        if (singleVariation) {
+            singleVariation.style.display = "none";
+        }
 
         thicknessSelect.addEventListener('change', () => {
+            if (!productDataReady()) {
+                return;
+            }
             const slug = thicknessSelect.value;
             if (productData.variantPrices?.[slug]) {
                 productData.pricePerM2 = productData.variantPrices[slug];
@@ -225,11 +386,23 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
-    calculatePrice();
+    onProductDataReady(() => {
+        obrobkaBlachyCalculatePrice();
+        if (!isLinearProduct() && typeof window.calculatePrice === 'function') {
+            window.calculatePrice();
+        }
+    });
 });
 
 
 function obrobkaBlachyCalculatePrice() {
+    if (!productDataReady()) {
+        return;
+    }
+    if (isLinearProduct()) {
+        return;
+    }
+
     const dimensionsAreValid = validateDimensions();
     if (!dimensionsAreValid) {
         return;
@@ -409,7 +582,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.calculatePrice').forEach(el =>
         el.addEventListener('input', () => {
         obrobkaBlachyCalculatePrice();
-        calculateFinalPrice();
+        if (!isLinearProduct() || linearInputsTouched) {
+            calculateFinalPrice();
+        }
         })
     );
 
@@ -430,7 +605,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    obrobkaBlachyCalculatePrice();
-    calculateFinalPrice();
+    onProductDataReady(() => {
+        obrobkaBlachyCalculatePrice();
+        if (!isLinearProduct() || linearInputsTouched) {
+            calculateFinalPrice();
+        }
+    });
 
 });

@@ -1,7 +1,7 @@
 (function ($) {
 
-    /*  Metody wyłączane przy koszyku powyżej ustawionego progu  */
-    const blockedWhenHighTotal = victoriniBlock.blockedAboveThreshold || [];
+    /*  Metody wyłączane przy koszyku > 1000 zł  */
+    const blockedWhenHighTotal = ['flat_rate:1', 'flat_rate:5'];
 
     /**
      * Dodaje czerwoną notatkę, jeżeli jeszcze jej nie ma.
@@ -43,19 +43,19 @@
             const $radio = $(this);
             const rateId = $radio.val();
 
-            /* --- A. Blokada za długi produkt (> ustalony limit) --- */
+            /* --- A. Blokada za długi produkt (> 2500 mm) --- */
             if (victoriniBlock.hasRestrictCat && rateId === victoriniBlock.blockedId) {
                 const $li = disableRate($radio);
-                addNote($li, '&nbsp;(niedostępne - nie wysyłamy kamienia kurierem)');
+                addNote($li, '&nbsp;(koszt dostawy wyrobów z kamienia ustalamy indywidualnie)');
             } else if ((victoriniBlock.hasOversize && rateId === victoriniBlock.blockedId)) {
                 const $li = disableRate($radio);
-                addNote($li, '&nbsp;(niedostępne – w przypadku długości powyżej ' + victoriniBlock.cartLengthLimit + ' koszt dostawy ustalimy indywidualnie)');
+                addNote($li, '&nbsp;( w przypadku długości powyżej 2500 mm koszt dostawy ustalamy indywidualnie)');
             }
 
 
 
             /* --- B. Blokada przy koszyku > 1000 zł --- */
-            if (victoriniBlock.cartValue > Number(victoriniBlock.cartThreshold) && blockedWhenHighTotal.includes(rateId)) {
+            if (victoriniBlock.cartValue > 1000 && blockedWhenHighTotal.includes(rateId)) {
                 const $li = hideRate($radio);
             }
         });

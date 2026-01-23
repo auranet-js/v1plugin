@@ -36,7 +36,12 @@ require_once $plugin_dir . 'inc/pcvProduct.php';
 require_once $plugin_dir . 'inc/kapinosyAndMinimalPricing.php';
 require_once $plugin_dir . 'inc/obrobkaBlachyRepeater.php';
 require_once $plugin_dir . 'inc/countertopPersonalization.php';
-require_once $plugin_dir . 'inc/settings.php';
+require_once $plugin_dir . 'inc/display-price.php';
+require_once $plugin_dir . 'inc/price-ctx.php';
+require_once $plugin_dir . 'inc/billingData.php';
+require_once $plugin_dir . 'inc/cart-pdf-generator.php';
+require_once $plugin_dir . 'inc/saved-carts-cpt.php';
+require_once $plugin_dir . 'inc/saved-carts-settings.php';
 // require_once $plugin_dir . 'inc/edit-cart-item.php';
 
 /* ------------------------------------------------------------------
@@ -47,13 +52,20 @@ function victorini2025_enqueue_assets()
 {
 
     $url = plugin_dir_url(__FILE__);
+    $path = plugin_dir_path(__FILE__);
+
+    $style_path = $path . 'style/style.css';
+    $script_path = $path . 'js/script.js';
+
+    $style_version = file_exists($style_path) ? filemtime($style_path) : '1.0.0';
+    $script_version = file_exists($script_path) ? filemtime($script_path) : '1.0.0';
 
     // CSS
     wp_enqueue_style(
         'victorini2025-style',
         $url . 'style/style.css',
         [],
-        '1.0.0',
+        $style_version,
         'all'
     );
 
@@ -62,7 +74,7 @@ function victorini2025_enqueue_assets()
         'victorini2025-script',
         $url . 'js/script.js',
         ['jquery'],
-        '1.0.0',
+        $script_version,
         true
     );
 }
@@ -90,22 +102,14 @@ function victorini2025_enqueue_block_shipping()
         true
     );
 
-    $blocked_id = get_option('victorini_blocked_method_id', 'flat_rate:7');
-    $threshold = (float) get_option('victorini_cart_threshold', 1000);
-    $blocked_methods = array_filter(array_map('trim', explode(',', get_option('victorini_blocked_methods', 'flat_rate:1,flat_rate:5'))));
-    $length_limit = (int) get_option('victorini_length_limit', 2500);
-
     wp_localize_script(
         $handle,
         'victoriniBlock',
         [
             'hasOversize' => victorini_cart_has_oversize(),
             'hasRestrictCat' => victorini_cart_has_restricted_material(),
-            'blockedId' => $blocked_id,
+            'blockedId' => 'flat_rate:7',
             'cartValue' => WC()->cart->get_cart_contents_total() + WC()->cart->get_cart_contents_tax(),
-            'cartThreshold' => $threshold,
-            'blockedAboveThreshold' => $blocked_methods,
-            'cartLengthLimit' => $length_limit,
         ]
     );
 
@@ -130,13 +134,12 @@ add_filter('your_taxonomy_filter_item_html', function ($html, $term) {
  * 5.  POMOCNICZE – KOSZYK
  * ------------------------------------------------------------------ */
 
-/** Czy w koszyku jest produkt przekraczający ustawiony limit długości? */
+/** Czy w koszyku jest produkt > 2500 mm? */
 function victorini_cart_has_oversize(): bool
 {
-    $limit = (int) get_option('victorini_length_limit', 2500);
     foreach (WC()->cart->get_cart() as $item) {
         $itemLength = $item['custom_length'] ?? $item['custom_length_obrobka'] ?? '';
-        if (!empty($itemLength) && (int) $itemLength > $limit) {
+        if (!empty($itemLength) && (int) $itemLength > 2500) {
             return true;
         }
     }
@@ -148,59 +151,16 @@ function victorini_cart_has_oversize(): bool
  * ------------------------------------------------------------------ */
 
 /**
- * Czy w koszyku jest produkt z “wrażliwej” kategorii?
+ * Czy w koszyku jest produkt z “wrażliwego” materiału?
  */
 function victorini_cart_has_restricted_material(): bool
 {
-
-    /* slug-i kategorii „dużych” */
-    $root_cats = array_filter(array_map('trim', explode(',', get_option(
-        'victorini_big_categories',
-        'blaty-kuchenne,blaty-lazienkowe,parapety-wewnetrzne,parapety-zewnetrzne,schody'
-    ))));
-
-    /* slug-i blokowanych materiałów */
-    $blocked_mat = array_filter(array_map('trim', explode(',', get_option(
-        'victorini_blocked_materials',
-        'granit,konglomerat-marmurowy'
-    ))));
+    // slug-i blokowanych materiałów
+    $blocked_mat = ['granit', 'konglomerat-marmurowy', 'konglomerat-kwarcowy'];
 
     foreach (WC()->cart->get_cart() as $item) {
+        $parent_id = $item['product_id'];
 
-        $parent_id = $item['product_id'];                 // rodzic zawsze ma kategorie
-        $terms = get_the_terms($parent_id, 'product_cat');
-
-        if (!$terms || is_wp_error($terms)) {
-            continue;
-        }
-
-        /* -------- 1. sprawdź kategorie + ich przodków -------- */
-        $in_restricted_cat = false;
-
-        foreach ($terms as $term) {
-
-            // sprawdzamy sam term
-            if (in_array($term->slug, $root_cats, true)) {
-                $in_restricted_cat = true;
-                break;
-            }
-
-            // …i wszystkich przodków
-            $ancestors = get_ancestors($term->term_id, 'product_cat');
-            foreach ($ancestors as $aid) {
-                $ancestor = get_term($aid, 'product_cat');
-                if ($ancestor && in_array($ancestor->slug, $root_cats, true)) {
-                    $in_restricted_cat = true;
-                    break 2;   // mamy dopasowanie – wychodzimy
-                }
-            }
-        }
-
-        if (!$in_restricted_cat) {
-            continue;   // produkt nie w “dużej” kategorii → następny
-        }
-
-        /* -------- 2. sprawdź materiał -------- */
         // a) atrybut wariacji w pozycji koszyka
         $attr = $item['variation']['attribute_pa_material']
             ?? $item['variation']['pa_material']
@@ -215,28 +175,25 @@ function victorini_cart_has_restricted_material(): bool
             return true;
         }
     }
-    return false;   // żadna pozycja nie spełniła obu wymagań
+
+    return false;   // żadna pozycja nie spełniła wymagań materiału
 }
 
 add_filter('woocommerce_package_rates', function ($rates, $package) {
 
-    $blocked_id = get_option('victorini_blocked_method_id', 'flat_rate:7');
-    $threshold = (float) get_option('victorini_cart_threshold', 1000);
-    $blocked_methods = array_filter(array_map('trim', explode(',', get_option('victorini_blocked_methods', 'flat_rate:1,flat_rate:5'))));
-
-    /* --- 1. Długi towar (> limit) --- */
+    /* --- 1. Długi towar (> 2500 mm) --- */
     $needs_manual_shipping = victorini_cart_has_oversize() || victorini_cart_has_restricted_material();
 
-    if ($needs_manual_shipping && isset($rates[$blocked_id])) {
-        $rate = $rates[$blocked_id];
+    if ($needs_manual_shipping && isset($rates['flat_rate:7'])) {
+        $rate = $rates['flat_rate:7'];
 
         // dopisek w labelu
         $rate->set_label($rate->get_label() . '');
     }
 
-    /* --- 2. Wartość koszyka > próg --- */
-    if ((WC()->cart->get_cart_contents_total() + WC()->cart->get_cart_contents_tax()) > $threshold) {
-        foreach ($blocked_methods as $blocked) {
+    /* --- 2. Wartość koszyka > 1000 zł (same produkty) --- */
+    if ((WC()->cart->get_cart_contents_total() + WC()->cart->get_cart_contents_tax()) > 1000) {
+        foreach (['flat_rate:1', 'flat_rate:5'] as $blocked) {
             unset($rates[$blocked]);
         }
     }
@@ -415,12 +372,8 @@ function add_custom_product_meta($product, $request, $creating)
  * 12.  WYSYŁKA LOGÓW BŁĘDÓW NA MAILA
  * ------------------------------------------------------------------ */
 
-function send_error_to_email($error, $email = null)
+function send_error_to_email($error, $email = 'dominik.chyziak@septemonline.com')
 {
-
-    if (!$email) {
-        $email = get_option('victorini_error_email', 'dominik.chyziak@septemonline.com');
-    }
 
     $subject = 'Błąd na stronie: ' . $_SERVER['HTTP_HOST'];
     $message = "Wystąpił błąd:\n\n" . print_r($error, true) . "\n\n";
@@ -457,6 +410,11 @@ add_filter('woocommerce_get_price_html', 'my_force_price_html_gross', 10, 2);
 
 function my_force_price_html_gross($price_html, $product)
 {
+
+    $is_linear = get_post_meta($product->get_id(), '_linear_meter_pricing', true) === 'yes';
+    if ($is_linear && $product->is_type('simple') && function_exists('victorini_linear_default_price')) {
+        return wc_price(victorini_linear_default_price($product));
+    }
 
     // 1) PRODUKTY PROSTE
     if ($product->is_type('simple')) {
@@ -500,4 +458,64 @@ function my_force_price_html_gross($price_html, $product)
 
     // 4) DOMYŚLNIE: cokolwiek innego (grupa, external…) – zostaw jak było
     return $price_html;
+}
+
+
+// 1) Dodaj top‐level menu zamiast pod Settings
+add_action('admin_menu', function() {
+    add_menu_page(
+        'Ustawienia dodatkowych kosztów', // tytuł strony
+        'Dodatkowe koszty',               // tekst w menu
+        'manage_options',                 // capability
+        'pcv_additional_costs',           // slug
+        'pcv_render_settings_page',       // callback
+        'dashicons-admin-tools',          // ikonka
+        80                                 // pozycja
+    );
+});
+
+// 2) Zarejestruj ustawienie i pole (bez zmian)
+add_action('admin_init', function() {
+    register_setting('pcv_additional_costs_group', 'pcv_cutting_cost', [
+        'type'              => 'number',
+        'sanitize_callback' => 'floatval',
+        'default'           => 15,
+    ]);
+
+    add_settings_section(
+        'pcv_section_main',
+        '',
+        '__return_false',
+        'pcv_additional_costs'
+    );
+
+    add_settings_field(
+        'pcv_cutting_cost',
+        'Cena przycięcia (za szt.)',
+        function() {
+            $value = get_option('pcv_cutting_cost', 15);
+            printf(
+                '<input type="number" step="0.01" name="pcv_cutting_cost" value="%s" class="small-text" /> zł',
+                esc_attr($value)
+            );
+        },
+        'pcv_additional_costs',
+        'pcv_section_main'
+    );
+});
+
+// 3) Render strony
+function pcv_render_settings_page() {
+    ?>
+    <div class="wrap">
+        <h1>Ustawienia dodatkowych kosztów</h1>
+        <form method="post" action="options.php">
+            <?php
+            settings_fields('pcv_additional_costs_group');
+            do_settings_sections('pcv_additional_costs');
+            submit_button();
+            ?>
+        </form>
+    </div>
+    <?php
 }

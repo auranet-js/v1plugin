@@ -55,7 +55,7 @@ function custom_wc_display_file_upload() {
 
     ?>
     <div class="custom-file-upload" style="margin: 12px 0; display: block;">
-        <label for="custom_file">Dodaj załącznik (JPG, PNG, BMP, JPEG, max <?php echo intval(get_option('victorini_upload_limit', 10)); ?>MB):</label>
+        <label for="custom_file">Dodaj załącznik (JPG, PNG, BMP, JPEG, max 10MB):</label>
         <input type="file" id="custom_file"  name="custom_file" accept=".jpg,.jpeg,.png,.bmp">
         <p id="file_upload_error" style="color:red;"></p>
         <div id="file_preview" style="margin-top:10px;"></div>
@@ -108,9 +108,8 @@ document.addEventListener("DOMContentLoaded", function(){
                 event.target.value = "";
                 return;
             }
-            var maxSize = <?php echo intval(get_option('victorini_upload_limit', 10)); ?> * 1024 * 1024;
-            if (file.size > maxSize) {
-                errorElement.textContent = "Plik jest za duży (max <?php echo intval(get_option('victorini_upload_limit', 10)); ?>MB)!";
+            if (file.size > 10 * 1024 * 1024) {
+                errorElement.textContent = "Plik jest za duży (max 10MB)!";
                 event.target.value = "";
                 return;
             }
