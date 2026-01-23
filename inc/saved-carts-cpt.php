@@ -338,19 +338,42 @@ function auranet_save_cart_to_cpt($cart, $customer_data = array()) {
         $tax_total += $cart_item['line_subtotal_tax'];
         
         // TUTAJ DODAJ - Pobierz atrybuty wariantu
-        $variation_attributes = '';
-        if ($product->is_type('variation')) {
-            $attributes = $product->get_attributes();
-            $attr_labels = array();
-            foreach ($attributes as $attr_key => $attr_value) {
-                $taxonomy = str_replace('attribute_', '', $attr_key);
-                $term = get_term_by('slug', $attr_value, $taxonomy);
-                if ($term) {
-                    $attr_labels[] = wc_attribute_label($taxonomy) . ': ' . $term->name;
-                }
-            }
-            $variation_attributes = implode(', ', $attr_labels);
+        // Pobierz atrybuty wariantu
+// Pobierz atrybuty wariantu
+$variation_attributes = '';
+if ($product->is_type('variation')) {
+    $attr_labels = array();
+    
+    // Pobierz wszystkie metadane wariantu
+    $variation_data = $product->get_variation_attributes();
+    
+    error_log('Variation data: ' . print_r($variation_data, true));
+    
+    foreach ($variation_data as $attr_key => $attr_value) {
+        if (empty($attr_value)) {
+            continue;
         }
+        
+        // Usuń prefix 'attribute_'
+        $taxonomy = str_replace('attribute_', '', $attr_key);
+        
+        // Sprawdź czy to taksonomia
+        if (taxonomy_exists($taxonomy)) {
+            $term = get_term_by('slug', $attr_value, $taxonomy);
+            if ($term) {
+                $label = wc_attribute_label($taxonomy);
+                $attr_labels[] = $label . ': ' . $term->name;
+            }
+        } else {
+            // Niestandardowy atrybut
+            $label = wc_attribute_label($attr_key);
+            $attr_labels[] = $label . ': ' . $attr_value;
+        }
+    }
+    
+    $variation_attributes = implode(' | ', $attr_labels);
+    error_log('Final attributes string: ' . $variation_attributes);
+}
         
         $items[] = array(
             'product_id'  => $cart_item['product_id'],
