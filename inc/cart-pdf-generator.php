@@ -530,6 +530,10 @@ function auranet_build_cart_pdf_html($cart_data, $settings) {
         if (!empty($item['sku'])) {
             $html .= '<div class="product-sku">SKU: ' . esc_html($item['sku']) . '</div>';
         }
+        
+        if (!empty($item['attributes'])) {
+           $html .= '<div class="product-sku">' . esc_html($item['attributes']) . '</div>';
+}
         if (!empty($item['dimensions'])) {
             $html .= '<div class="product-dims">Wymiary: ' . esc_html($item['dimensions']) . '</div>';
         }
