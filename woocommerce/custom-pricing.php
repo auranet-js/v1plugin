@@ -180,6 +180,16 @@ function custom_wc_checkout_create_order_line_item($item, $cart_item_key, $value
     if (isset($values['custom_width'])) {
         $item->add_meta_data('custom_width', $values['custom_width']);
     }
+
+    // ========== DODAJ DODANO DLA OBROBEK ==========
+    if (isset($values['custom_length_obrobka'])) {
+        $item->add_meta_data('custom_length_obrobka', $values['custom_length_obrobka']);
+    }
+    if (isset($values['custom_wymiar']) && is_array($values['custom_wymiar'])) {
+        foreach ($values['custom_wymiar'] as $name => $value) {
+            $item->add_meta_data('custom_wymiar_' . $name, $value);
+        }
+    }
     if (isset($values['custom_file'])) {
         $item->add_meta_data('custom_file', $values['custom_file']);
     }
