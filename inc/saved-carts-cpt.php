@@ -91,6 +91,8 @@ function auranet_saved_cart_details_callback($post) {
     $cart_subtotal = get_post_meta($post->ID, '_cart_subtotal', true);
     $edited_by = get_post_meta($post->ID, '_edited_by', true);
     $edited_at = get_post_meta($post->ID, '_edited_at', true);
+    $transport_cost = get_post_meta($post->ID, '_transport_cost', true);
+    $cart_notes = get_post_meta($post->ID, '_cart_notes', true);
     
     wp_nonce_field('save_cart_items', 'cart_items_nonce');
     
@@ -145,16 +147,54 @@ function auranet_saved_cart_details_callback($post) {
             echo '</tbody>';
             echo '<tfoot>';
             $cart_tax = get_post_meta($post->ID, '_cart_tax', true);
-            echo '<tr style="background: #333; font-weight: bold;">';
-            echo '<td colspan="6" style="text-align: right; padding: 10px; color: #fff;">RAZEM BRUTTO:</td>';
-            echo '<td style="padding: 10px; color: #fff;" id="cart-total-display">' . number_format((float)$cart_total, 2, ',', ' ') . ' zł</td>';
-            echo '</tr>';
             echo '<tr style="background: #f9f9f9;">';
             echo '<td colspan="6" style="text-align: right; padding: 10px;">w tym VAT (23%):</td>';
             echo '<td style="padding: 10px;" id="cart-tax-display">' . number_format((float)$cart_tax, 2, ',', ' ') . ' zł</td>';
             echo '</tr>';
+            echo '<tr style="background: #f5f5f5; font-weight: bold;">';
+            echo '<td colspan="6" style="text-align: right; padding: 10px;">Suma produktów:</td>';
+            echo '<td style="padding: 10px;" id="cart-products-total-display">' . number_format((float)$cart_total, 2, ',', ' ') . ' zł</td>';
+            echo '</tr>';
+            echo '<tr style="background: #e8f4fd;" id="transport-row">';
+            echo '<td colspan="6" style="text-align: right; padding: 10px;">Koszt transportu:</td>';
+            echo '<td style="padding: 10px;" id="cart-transport-display">';
+            if ($transport_cost === '' || $transport_cost === null || $transport_cost === false) {
+                echo '–';
+            } elseif ((float)$transport_cost == 0) {
+                echo 'Gratis';
+            } else {
+                echo number_format((float)$transport_cost, 2, ',', ' ') . ' zł';
+            }
+            echo '</td>';
+            echo '</tr>';
+            // Suma końcowa (produkty + transport)
+            $final_total = (float)$cart_total;
+            if ($transport_cost !== '' && $transport_cost !== null && $transport_cost !== false) {
+                $final_total += (float)$transport_cost;
+            }
+            echo '<tr style="background: #333; font-weight: bold;">';
+            echo '<td colspan="6" style="text-align: right; padding: 10px; color: #fff;">RAZEM BRUTTO:</td>';
+            echo '<td style="padding: 10px; color: #fff;" id="cart-total-display">' . number_format($final_total, 2, ',', ' ') . ' zł</td>';
+            echo '</tr>';
             echo '</tfoot>';
             echo '</table>';
+            
+            // --- KOSZT TRANSPORTU ---
+            echo '<table class="widefat" style="margin-top: 15px; max-width: 400px;">';
+            echo '<tr>';
+            echo '<td style="padding: 10px;"><strong>Koszt transportu (brutto, zł):</strong></td>';
+            echo '<td style="padding: 10px; width: 150px;">';
+            echo '<input type="number" step="0.01" min="0" name="transport_cost" value="' . esc_attr($transport_cost) . '" style="width: 120px;" placeholder="puste = brak" id="transport-cost-input">';
+            echo '</td>';
+            echo '</tr>';
+            echo '</table>';
+            echo '<p class="description">Wpisz 0 aby wyświetlić "Gratis". Pozostaw puste aby wyświetlić "–".</p>';
+            
+            // --- UWAGI ---
+            echo '<div style="margin-top: 15px;">';
+            echo '<p><strong>Uwagi:</strong></p>';
+            echo '<textarea name="cart_notes" rows="4" style="width: 100%;" placeholder="Uwagi do kalkulacji...">' . esc_textarea($cart_notes) . '</textarea>';
+            echo '</div>';
             
             // Info o edycji
             if (!empty($edited_by)) {
@@ -168,7 +208,7 @@ function auranet_saved_cart_details_callback($post) {
                 echo '</p>';
             }
             
-            echo '<p style="margin-top: 15px;"><em>Zmień cenę lub ilość i kliknij "Aktualizuj" aby zapisać zmiany.</em></p>';
+            echo '<p style="margin-top: 15px;"><em>Zmień cenę, ilość lub koszt transportu i kliknij "Aktualizuj" aby zapisać zmiany.</em></p>';
         }
     } else {
         echo '<p>Brak danych koszyka.</p>';
@@ -192,10 +232,36 @@ function auranet_saved_cart_details_callback($post) {
             var tax = totalBrutto * 23 / 123;
             
             $('#cart-tax-display').text(tax.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' zł');
-            $('#cart-total-display').text(totalBrutto.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' zł');
+            $('#cart-products-total-display').text(totalBrutto.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' zł');
+            
+            // Koszt transportu
+            var transportVal = $('#transport-cost-input').val();
+            var transport = 0;
+            var transportText = '–';
+            
+            if (transportVal === '' || transportVal === undefined) {
+                transportText = '–';
+                transport = 0;
+            } else if (parseFloat(transportVal) === 0) {
+                transportText = 'Gratis';
+                transport = 0;
+            } else {
+                transport = parseFloat(transportVal) || 0;
+                transportText = transport.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' zł';
+            }
+            
+            $('#cart-transport-display').text(transportText);
+            
+            // Suma końcowa
+            var finalTotal = totalBrutto + transport;
+            $('#cart-total-display').text(finalTotal.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' zł');
         }
         
         $('.cart-item-price, .cart-item-quantity').on('change keyup', function() {
+            recalculateTotals();
+        });
+        
+        $('#transport-cost-input').on('change keyup', function() {
             recalculateTotals();
         });
     });
@@ -337,36 +403,34 @@ function auranet_save_cart_to_cpt($cart, $customer_data = array()) {
         $subtotal += $cart_item['line_subtotal'];
         $tax_total += $cart_item['line_subtotal_tax'];
         
-        // TUTAJ DODAJ - Pobierz atrybuty wariantu
         // Pobierz atrybuty wariantu
-/// Pobierz atrybuty wariantu
-$variation_attributes = '';
-if ($product->is_type('variation')) {
-    $attr_labels = array();
-    $attributes = $product->get_attributes();
-    
-    foreach ($attributes as $attr_key => $attr_value) {
-        if (empty($attr_value)) {
-            continue;
-        }
-        
-        $taxonomy = str_replace('attribute_', '', $attr_key);
-        
-        // Sprawdź czy to taksonomia
-        if (taxonomy_exists($taxonomy)) {
-            $term = get_term_by('slug', $attr_value, $taxonomy);
-            if ($term) {
-                $attr_labels[] = wc_attribute_label($taxonomy) . ': ' . $term->name;
+        $variation_attributes = '';
+        if ($product->is_type('variation')) {
+            $attr_labels = array();
+            $attributes = $product->get_attributes();
+            
+            foreach ($attributes as $attr_key => $attr_value) {
+                if (empty($attr_value)) {
+                    continue;
+                }
+                
+                $taxonomy = str_replace('attribute_', '', $attr_key);
+                
+                // Sprawdź czy to taksonomia
+                if (taxonomy_exists($taxonomy)) {
+                    $term = get_term_by('slug', $attr_value, $taxonomy);
+                    if ($term) {
+                        $attr_labels[] = wc_attribute_label($taxonomy) . ': ' . $term->name;
+                    }
+                } else {
+                    // Atrybut niestandardowy (nie-taksonomia)
+                    $label = wc_attribute_label($attr_key);
+                    $attr_labels[] = $label . ': ' . $attr_value;
+                }
             }
-        } else {
-            // Atrybut niestandardowy (nie-taksonomia)
-            $label = wc_attribute_label($attr_key);
-            $attr_labels[] = $label . ': ' . $attr_value;
+            
+            $variation_attributes = implode(' | ', $attr_labels);
         }
-    }
-    
-    $variation_attributes = implode(' | ', $attr_labels);
-}
         
         $items[] = array(
             'product_id'  => $cart_item['product_id'],
@@ -394,9 +458,9 @@ if ($product->is_type('variation')) {
     
     update_post_meta($post_id, '_cart_number', $cart_number);
     update_post_meta($post_id, '_cart_data', json_encode($items, JSON_UNESCAPED_UNICODE));
-    update_post_meta($post_id, '_cart_subtotal', $subtotal + $tax_total); // suma brutto (jako "netto" w kontekście edycji)
+    update_post_meta($post_id, '_cart_subtotal', $subtotal + $tax_total);
     update_post_meta($post_id, '_cart_tax', $tax_total);
-    update_post_meta($post_id, '_cart_total', $subtotal + $tax_total); // razem brutto
+    update_post_meta($post_id, '_cart_total', $subtotal + $tax_total);
     
     $user_id = get_current_user_id();
     update_post_meta($post_id, '_user_id', $user_id);
@@ -455,7 +519,12 @@ function auranet_saved_cart_column_content($column, $post_id) {
             
         case 'total':
             $total = get_post_meta($post_id, '_cart_total', true);
-            echo number_format((float)$total, 2, ',', ' ') . ' zł';
+            $transport = get_post_meta($post_id, '_transport_cost', true);
+            $final = (float)$total;
+            if ($transport !== '' && $transport !== null && $transport !== false) {
+                $final += (float)$transport;
+            }
+            echo number_format($final, 2, ',', ' ') . ' zł';
             break;
     }
 }
@@ -528,6 +597,32 @@ function auranet_save_cart_items($post_id, $post, $update) {
     update_post_meta($post_id, '_cart_subtotal', $total_brutto);
     update_post_meta($post_id, '_cart_tax', $tax);
     update_post_meta($post_id, '_cart_total', $total_brutto);
+    
+    // Zapis kosztu transportu
+    if (isset($_POST['transport_cost'])) {
+        $transport = $_POST['transport_cost'];
+        if ($transport === '' || $transport === null) {
+            delete_post_meta($post_id, '_transport_cost');
+        } else {
+            update_post_meta($post_id, '_transport_cost', floatval($transport));
+        }
+        
+        // Sprawdź zmianę transportu
+        $old_transport = get_post_meta($post_id, '_transport_cost', true);
+        if ($old_transport != $transport) {
+            $has_changes = true;
+        }
+    }
+    
+    // Zapis uwag
+    if (isset($_POST['cart_notes'])) {
+        $new_notes = sanitize_textarea_field($_POST['cart_notes']);
+        $old_notes = get_post_meta($post_id, '_cart_notes', true);
+        update_post_meta($post_id, '_cart_notes', $new_notes);
+        if ($old_notes != $new_notes) {
+            $has_changes = true;
+        }
+    }
     
     // Zapisz info o edycji tylko jeśli były zmiany
     if ($has_changes) {

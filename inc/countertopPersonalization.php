@@ -1,8 +1,8 @@
 <?php add_action('admin_menu', 'countertop_customization_menu');
 function countertop_customization_menu() {
     add_menu_page(
-        'Personalizacja blatów',
-        'Personalizacja blatów',
+        'Personalizacja usług',
+        'Personalizacja usług',
         'manage_options',
         'countertop_customization',
         'render_countertop_customization_page',
@@ -14,9 +14,11 @@ function countertop_customization_menu() {
 function render_countertop_customization_page() {
     $kitchen_services = get_option('countertop_kitchen_services', []);
     $bathroom_services = get_option('countertop_bathroom_services', []);
+    $stairs_marble_services = get_option('countertop_stairs_marble_services', []);
+    $stairs_quartz_services = get_option('countertop_stairs_quartz_services', []);
     ?>
     <div class="wrap">
-        <h1>Personalizacja blatów</h1>
+        <h1>Personalizacja usług</h1>
         <form method="post">
             <?php wp_nonce_field('save_countertop_customization'); ?>
             <h2>Blaty kuchenne</h2>
@@ -53,6 +55,40 @@ function render_countertop_customization_page() {
             </table>
             <p><button type="button" class="button" id="add-bathroom-row">Dodaj usługę</button></p>
 
+            <h2>Schody – konglomerat marmurowy</h2>
+            <table id="stairs-marble-services-table" class="widefat">
+                <thead>
+                    <tr><th>Nazwa usługi</th><th>Cena (zł)</th><th></th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($stairs_marble_services as $index => $service): ?>
+                        <tr>
+                            <td><input name="stairs_marble_services[<?php echo $index; ?>][label]" value="<?php echo esc_attr($service['label']); ?>" /></td>
+                            <td><input name="stairs_marble_services[<?php echo $index; ?>][price]" value="<?php echo esc_attr($service['price']); ?>" type="number" step="0.01" /></td>
+                            <td><button type="button" class="button remove-row">Usuń</button></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <p><button type="button" class="button" id="add-stairs-marble-row">Dodaj usługę</button></p>
+
+            <h2>Schody – konglomerat kwarcowy / granit</h2>
+            <table id="stairs-quartz-services-table" class="widefat">
+                <thead>
+                    <tr><th>Nazwa usługi</th><th>Cena (zł)</th><th></th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($stairs_quartz_services as $index => $service): ?>
+                        <tr>
+                            <td><input name="stairs_quartz_services[<?php echo $index; ?>][label]" value="<?php echo esc_attr($service['label']); ?>" /></td>
+                            <td><input name="stairs_quartz_services[<?php echo $index; ?>][price]" value="<?php echo esc_attr($service['price']); ?>" type="number" step="0.01" /></td>
+                            <td><button type="button" class="button remove-row">Usuń</button></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <p><button type="button" class="button" id="add-stairs-quartz-row">Dodaj usługę</button></p>
+
             <p><input type="submit" name="submit_customization" class="button button-primary" value="Zapisz zmiany"></p>
         </form>
     </div>
@@ -79,6 +115,14 @@ function render_countertop_customization_page() {
             addRow('bathroom-services-table', 'bathroom_services');
         });
 
+        document.getElementById('add-stairs-marble-row').addEventListener('click', function () {
+            addRow('stairs-marble-services-table', 'stairs_marble_services');
+        });
+
+        document.getElementById('add-stairs-quartz-row').addEventListener('click', function () {
+            addRow('stairs-quartz-services-table', 'stairs_quartz_services');
+        });
+
         document.querySelectorAll('.remove-row').forEach(btn => {
             btn.addEventListener('click', function () {
                 this.closest('tr').remove();
@@ -98,12 +142,18 @@ function save_countertop_customization_data() {
     ) {
         $kitchen_raw = $_POST['kitchen_services'] ?? [];
         $bathroom_raw = $_POST['bathroom_services'] ?? [];
+        $stairs_marble_raw = $_POST['stairs_marble_services'] ?? [];
+        $stairs_quartz_raw = $_POST['stairs_quartz_services'] ?? [];
 
         $kitchen = generate_service_list_with_keys($kitchen_raw);
         $bathroom = generate_service_list_with_keys($bathroom_raw);
+        $stairs_marble = generate_service_list_with_keys($stairs_marble_raw);
+        $stairs_quartz = generate_service_list_with_keys($stairs_quartz_raw);
 
         update_option('countertop_kitchen_services', $kitchen);
         update_option('countertop_bathroom_services', $bathroom);
+        update_option('countertop_stairs_marble_services', $stairs_marble);
+        update_option('countertop_stairs_quartz_services', $stairs_quartz);
 
         add_action('admin_notices', function () {
             echo '<div class="notice notice-success"><p>Dane zostały zapisane.</p></div>';

@@ -168,7 +168,13 @@ function custom_wc_display_dimensions_fields()
         $type = countertop_get_category_type($product->get_id());
         
         if ($type) {
-            $options = get_option($type === 'kitchen' ? 'countertop_kitchen_services' : 'countertop_bathroom_services', []);
+            $service_option_map = [
+                'kitchen'       => 'countertop_kitchen_services',
+                'bathroom'      => 'countertop_bathroom_services',
+                'stairs_marble' => 'countertop_stairs_marble_services',
+                'stairs_quartz' => 'countertop_stairs_quartz_services',
+            ];
+            $options = get_option($service_option_map[$type] ?? '', []);
         
         echo '<template id="cutout_template">';
         echo '<div class="cutout-row" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">';
@@ -264,19 +270,30 @@ function countertop_get_category_type($product_id) {
         'blaty-lazienkowe-z-kwarcytu'
     ];
 
+    $stairs_marble_slugs = [
+        'schody-wewnetrzne-konglomerat-marmurowy',
+    ];
+
+    $stairs_quartz_slugs = [
+        'schody-wewnetrzne-konglomerat-kwarcowy',
+        'schody-wewnetrzne-z-granitu',
+    ];
+
     $terms = get_the_terms($product_id, 'product_cat');
     if (!$terms || is_wp_error($terms)) return null;
 
     foreach ($terms as $term) {
         if (in_array($term->slug, $kitchen_slugs)) return 'kitchen';
         if (in_array($term->slug, $bathroom_slugs)) return 'bathroom';
+        if (in_array($term->slug, $stairs_marble_slugs)) return 'stairs_marble';
+        if (in_array($term->slug, $stairs_quartz_slugs)) return 'stairs_quartz';
     }
     return null;
 }
 
 /**
  * Zwraca mapę [key] => ['key'=>..,'label'=>..,'price'=>..] dla danego produktu.
- * Uwzględnia czy to kuchenny czy łazienkowy blat.
+ * Uwzględnia czy to kuchenny czy łazienkowy blat, czy schody wewnętrzne.
  */
 function countertop_get_service_options_for_product( $product_id ) {
     // jeśli to wariacja, pobierz id rodzica (bo kategorie zwykle na rodzicu)
@@ -291,10 +308,14 @@ function countertop_get_service_options_for_product( $product_id ) {
         return array();
     }
 
-    $raw = get_option(
-        $type === 'kitchen' ? 'countertop_kitchen_services' : 'countertop_bathroom_services',
-        array()
-    );
+    $service_option_map = [
+        'kitchen'       => 'countertop_kitchen_services',
+        'bathroom'      => 'countertop_bathroom_services',
+        'stairs_marble' => 'countertop_stairs_marble_services',
+        'stairs_quartz' => 'countertop_stairs_quartz_services',
+    ];
+
+    $raw = get_option( $service_option_map[$type] ?? '', array() );
 
     $map = array();
     if ( is_array( $raw ) ) {

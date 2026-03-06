@@ -297,13 +297,15 @@ function auranet_generate_cart_pdf_from_wc_cart($cart, $download = true) {
     }
     
     $cart_data = array(
-        'number'   => 'PODGLĄD-' . date('His'),
-        'date'     => date('Y-m-d H:i:s'),
-        'items'    => $items,
-        'subtotal' => $cart->get_subtotal(),
-        'tax'      => $cart->get_total_tax(),
-        'total'    => $cart->get_total('edit'),
-        'customer' => array(
+        'number'         => 'PODGLĄD-' . date('His'),
+        'date'           => date('Y-m-d H:i:s'),
+        'items'          => $items,
+        'subtotal'       => $cart->get_subtotal(),
+        'tax'            => $cart->get_total_tax(),
+        'total'          => $cart->get_total('edit'),
+        'transport_cost' => null,
+        'notes'          => '',
+        'customer'       => array(
             'name'    => '',
             'email'   => '',
             'phone'   => '',
@@ -358,14 +360,21 @@ function auranet_generate_saved_cart_pdf($post_id, $download = true) {
         $edited_by_name = $editor ? $editor->display_name : 'Nieznany użytkownik';
     }
     
+    // Koszt transportu - pobierz surową wartość
+    $transport_cost_raw = get_post_meta($post_id, '_transport_cost', true);
+    // null gdy meta nie istnieje (puste pole = kreska), '0' lub wartość liczbowa
+    $transport_cost = ($transport_cost_raw === '' || $transport_cost_raw === false) ? null : (float)$transport_cost_raw;
+    
     $cart_data = array(
-        'number'   => $cart_number,
-        'date'     => $post->post_date,
-        'items'    => $items,
-        'subtotal' => get_post_meta($post_id, '_cart_subtotal', true),
-        'tax'      => get_post_meta($post_id, '_cart_tax', true),
-        'total'    => get_post_meta($post_id, '_cart_total', true),
-        'customer' => array(
+        'number'         => $cart_number,
+        'date'           => $post->post_date,
+        'items'          => $items,
+        'subtotal'       => get_post_meta($post_id, '_cart_subtotal', true),
+        'tax'            => get_post_meta($post_id, '_cart_tax', true),
+        'total'          => get_post_meta($post_id, '_cart_total', true),
+        'transport_cost' => $transport_cost,
+        'notes'          => get_post_meta($post_id, '_cart_notes', true),
+        'customer'       => array(
             'name'    => get_post_meta($post_id, '_customer_name', true),
             'email'   => get_post_meta($post_id, '_customer_email', true),
             'phone'   => get_post_meta($post_id, '_customer_phone', true),
@@ -425,8 +434,11 @@ function auranet_build_cart_pdf_html($cart_data, $settings) {
         .product-dims { font-size: 8px; color: #666; }
         .product-file { font-size: 7px; color: #0066cc; }
         .total-row { background-color: #f5f5f5; font-weight: bold; }
+        .transport-row { background-color: #e8f4fd; }
         .final-row { background-color: #333; color: white; font-weight: bold; }
         .text-right { text-align: right; }
+        .notes-section { margin-top: 20px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; font-size: 9px; }
+        .notes-section strong { display: block; margin-bottom: 5px; }
         .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 8px; color: #666; }
         .custom-header { margin-bottom: 15px; font-size: 9px; }
         .custom-footer { margin-top: 15px; font-size: 8px; }
@@ -533,7 +545,7 @@ function auranet_build_cart_pdf_html($cart_data, $settings) {
         
         if (!empty($item['attributes'])) {
            $html .= '<div class="product-sku">' . esc_html($item['attributes']) . '</div>';
-}
+        }
         if (!empty($item['dimensions'])) {
             $html .= '<div class="product-dims">Wymiary: ' . esc_html($item['dimensions']) . '</div>';
         }
@@ -565,14 +577,49 @@ function auranet_build_cart_pdf_html($cart_data, $settings) {
         $html .= '</tr>';
     }
     
-    // RAZEM BRUTTO
+    // Suma produktów
+    $products_total = (float)$cart_data['total'];
+    $html .= '<tr class="total-row">';
+    $html .= '<td colspan="4" class="text-right">Suma produktów:</td>';
+    $html .= '<td>' . number_format($products_total, 2, ',', ' ') . ' zł</td>';
+    $html .= '</tr>';
+    
+    // KOSZT TRANSPORTU
+    $transport_cost = isset($cart_data['transport_cost']) ? $cart_data['transport_cost'] : null;
+    $html .= '<tr class="transport-row">';
+    $html .= '<td colspan="4" class="text-right">Koszt transportu:</td>';
+    $html .= '<td>';
+    if ($transport_cost === null) {
+        $html .= '–';
+    } elseif ((float)$transport_cost == 0) {
+        $html .= 'Gratis';
+    } else {
+        $html .= number_format((float)$transport_cost, 2, ',', ' ') . ' zł';
+    }
+    $html .= '</td>';
+    $html .= '</tr>';
+    
+    // RAZEM BRUTTO (produkty + transport)
+    $final_total = $products_total;
+    if ($transport_cost !== null) {
+        $final_total += (float)$transport_cost;
+    }
     $html .= '<tr class="final-row">';
     $html .= '<td colspan="4" class="text-right">RAZEM BRUTTO:</td>';
-    $html .= '<td>' . number_format((float)$cart_data['total'], 2, ',', ' ') . ' zł</td>';
+    $html .= '<td>' . number_format($final_total, 2, ',', ' ') . ' zł</td>';
     $html .= '</tr>';
     
     $html .= '</tfoot>';
     $html .= '</table>';
+    
+    // UWAGI
+    $notes = isset($cart_data['notes']) ? trim($cart_data['notes']) : '';
+    if (!empty($notes)) {
+        $html .= '<div class="notes-section">';
+        $html .= '<strong>Uwagi:</strong>';
+        $html .= nl2br(esc_html($notes));
+        $html .= '</div>';
+    }
     
     // FOOTER
     $html .= '<div class="footer">';
@@ -816,10 +863,12 @@ function auranet_handle_preview_cart_pdf() {
                 'image_url'   => '',
             ),
         ),
-        'subtotal' => 449.97,
-        'tax'      => 103.49,
-        'total'    => 553.46,
-        'customer' => array(
+        'subtotal'       => 449.97,
+        'tax'            => 103.49,
+        'total'          => 553.46,
+        'transport_cost' => 150.00,
+        'notes'          => 'Przykładowe uwagi do kalkulacji. Dostawa w ciągu 5 dni roboczych.',
+        'customer'       => array(
             'name'    => 'Jan Kowalski',
             'email'   => 'jan@example.com',
             'phone'   => '+48 123 456 789',
